@@ -11,7 +11,27 @@ function updateUser(u){user=u;$('#userState').textContent=u?(u.email||'Signed in
 if(sb){sb.auth.getSession().then(({data})=>updateUser(data.session?.user||null));sb.auth.onAuthStateChange((_event,session)=>updateUser(session?.user||null))}
 $('#loginNav').onclick=()=>showAuth('login');$('#signupNav').onclick=()=>showAuth('signup');document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeModal(b.dataset.close));$('#authModal').onclick=e=>{if(e.target.id==='authModal')closeModal('authModal')};document.querySelectorAll('[data-auth-tab]').forEach(b=>b.onclick=()=>{authMode=b.dataset.authTab;renderAuth()});
 $('#authForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.currentTarget),email=f.get('email'),password=f.get('password'),fullName=f.get('fullName');if(!hasConfig){toast('Supabase is not connected yet. Account sign-in is unavailable.');$('#authMessage').textContent='Add the Supabase Project URL and anon/public key in config.js to enable authentication.';return}$('#authSubmit').disabled=true;try{if(authMode==='signup'){const {data,error}=await sb.auth.signUp({email,password,options:{data:{full_name:fullName}}});if(error)throw error;if(data.session){updateUser(data.user);toast('Account created. You can continue booking.')}else{$('#authMessage').textContent='Check your email for the confirmation link, then log in.';toast('Check your email to confirm your account.')} }else{const {data,error}=await sb.auth.signInWithPassword({email,password});if(error)throw error;updateUser(data.user);toast('You are logged in.')}if(user){closeModal('authModal');if(pendingBooking){submitDemoBooking(pendingBooking);pendingBooking=null}}}catch(err){$('#authMessage').textContent=err.message||'Unable to authenticate.'}finally{$('#authSubmit').disabled=false}};
-function submitDemoBooking(data){const requests=JSON.parse(localStorage.getItem('sd_customer_requests')||'[]');requests.unshift({...data,createdAt:new Date().toISOString(),status:'Request received (demo)' });localStorage.setItem('sd_customer_requests',JSON.stringify(requests));$('#bookingMessage').textContent='Your request was saved in this browser demo only. It has not been sent to the clinic. Contact the clinic to confirm.';toast('Demo request saved on this device.')}
+function submitDemoBooking(data){
+ const now=new Date().toISOString();
+ const requests=JSON.parse(localStorage.getItem('sd_customer_requests')||'[]');
+ requests.unshift({...data,createdAt:now,status:'Pending'});
+ localStorage.setItem('sd_customer_requests',JSON.stringify(requests));
+ // Demo bridge: the staff dashboard reads these same-origin localStorage keys.
+ // This only syncs on the same browser/device; it is not a cross-device clinic database.
+ const appts=JSON.parse(localStorage.getItem('sd_appts')||'[]');
+ appts.push({date:data.date,time:data.time,patient:data.name,treatment:data.service,doctor:'To be assigned',status:'Pending',customerEmail:data.email,customerPhone:data.phone,customerRequest:true});
+ localStorage.setItem('sd_appts',JSON.stringify(appts));
+ const patients=JSON.parse(localStorage.getItem('sd_patients')||'[]');
+ if(!patients.some(p=>(p.email&&p.email.toLowerCase()===data.email.toLowerCase())||p.name.toLowerCase()===data.name.toLowerCase())){
+  patients.unshift({id:'PT-'+String(Date.now()).slice(-6),name:data.name,contact:data.phone,email:data.email,last:'Not visited yet',status:'Active'});
+  localStorage.setItem('sd_patients',JSON.stringify(patients));
+ }
+ const activities=JSON.parse(localStorage.getItem('sd_activities')||'[]');
+ activities.unshift({time:new Date().toLocaleString('en-PH'),text:'Customer appointment request received: '+data.name+' ('+data.service+')'});
+ localStorage.setItem('sd_activities',JSON.stringify(activities.slice(0,60)));
+ $('#bookingMessage').textContent='Your request has been added to the staff dashboard on this browser. The clinic must review and confirm it. This demo does not sync across different devices yet.';
+ toast('Appointment request added to this browser demo.');
+}
 $('#bookingForm').onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget));if(!user){pendingBooking=data;showAuth('login');$('#authMessage').textContent=hasConfig?'Log in or create an account to continue.':'Connect Supabase authentication before customer sign-up and booking can be enabled.';return}submitDemoBooking(data)};
 $('#menuToggle').onclick=()=>$('#mainNav').classList.toggle('open');document.querySelectorAll('#mainNav a').forEach(a=>a.onclick=()=>$('#mainNav').classList.remove('open'));
 const answers=[
