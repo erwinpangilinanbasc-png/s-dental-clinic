@@ -1,6 +1,23 @@
 (()=>{
 const $=s=>document.querySelector(s), toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)};
-const cfg=window.SUPABASE_CONFIG||{}, hasConfig=!!(cfg.url&&cfg.anonKey&&window.supabase), sb=hasConfig?window.supabase.createClient(cfg.url,cfg.anonKey):null;
+
+function showReschedulePage(){
+ const token=new URLSearchParams(location.search).get('reschedule');if(!token)return;
+ document.querySelector('main').innerHTML='<section class="section" style="min-height:70vh"><div class="form-card" style="max-width:650px;margin:30px auto"><span class="eyebrow">APPOINTMENT UPDATE</span><h2>Review your new appointment time</h2><div id="rescheduleContent"><p>Loading your appointment update…</p></div></div></section>';
+ const all=JSON.parse(localStorage.getItem('sd_reschedules')||'[]'),item=all.find(x=>x.token===token);
+ const root=$('#rescheduleContent');
+ if(!item){root.innerHTML='<p>This appointment link is unavailable on this device. Please contact S Dental Clinic for help. Links in this demo only work in the same browser where the request was created.</p>';return}
+ if(item.status==='Awaiting response'){
+  root.innerHTML='<p>Your original appointment with <b>'+item.originalDoctor+'</b> on <b>'+item.originalDate+'</b> at <b>'+item.originalTime+'</b> was affected by an emergency leave.</p><div class="availability-panel available"><strong>Suggested replacement</strong>'+item.proposedDate+' at '+item.proposedTime+' with '+item.proposedDoctor+'</div><p>Please choose one option below.</p><div class="emergency-actions"><button class="btn btn-primary" id="acceptReschedule">Confirm new schedule</button><button class="btn btn-outline" id="showAlternate">Request another schedule</button><button class="btn btn-outline" id="cancelReschedule">Cancel appointment</button></div><form id="alternateForm" hidden style="margin-top:18px"><label>Preferred date<input type="date" name="date" min="'+new Date().toISOString().slice(0,10)+'" required></label><label>Preferred time<select name="time" required><option value="">Choose a time</option><option>09:00 AM</option><option>10:00 AM</option><option>11:00 AM</option><option>01:00 PM</option><option>02:00 PM</option><option>03:00 PM</option><option>04:00 PM</option></select></label><button class="btn btn-primary">Send preferred schedule</button></form><p class="form-foot" id="rescheduleMessage">Your appointment is not changed until you confirm a proposal.</p>';
+  const update=(status,extra={})=>{item.status=status;Object.assign(item,extra);localStorage.setItem('sd_reschedules',JSON.stringify(all));const appts=JSON.parse(localStorage.getItem('sd_appts')||'[]');const appt=appts.find(a=>a.rescheduleToken===token);if(appt){if(status==='Confirmed'){appt.date=item.proposedDate;appt.time=item.proposedTime;appt.doctor=item.proposedDoctor;appt.status='Confirmed'}else if(status==='Cancelled'){appt.status='Cancelled'}else appt.status='Reschedule requested'}localStorage.setItem('sd_appts',JSON.stringify(appts));root.innerHTML='<div class="availability-panel available"><strong>Response recorded</strong>'+status+'. The clinic can review your response.</div>';};
+  $('#acceptReschedule').onclick=()=>update('Confirmed');
+  $('#cancelReschedule').onclick=()=>{if(confirm('Are you sure you want to cancel this appointment?'))update('Cancelled')};
+  $('#showAlternate').onclick=()=>{$('#alternateForm').hidden=false};
+  $('#alternateForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);update('Alternative requested',{preferredDate:f.get('date'),preferredTime:f.get('time')})};
+ }else root.innerHTML='<div class="availability-panel"><strong>Response already recorded</strong>'+item.status+'. If you need help, contact the clinic directly.</div>';
+}
+showReschedulePage();
+\nconst cfg=window.SUPABASE_CONFIG||{}, hasConfig=!!(cfg.url&&cfg.anonKey&&window.supabase), sb=hasConfig?window.supabase.createClient(cfg.url,cfg.anonKey):null;
 let user=null, authMode='login', pendingBooking=null;
 $('#year').textContent=new Date().getFullYear();
 const gcashName=(cfg.gcashMerchantName||'').trim(),gcashQr=(cfg.gcashQrImageUrl||'').trim();
