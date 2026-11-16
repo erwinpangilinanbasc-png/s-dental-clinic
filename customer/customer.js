@@ -9,7 +9,40 @@ if(gcashQr && (/^https:\/\//i.test(gcashQr)||/^\.\.\//.test(gcashQr)||/^\.\//.te
  const qr=$('#gcashQrImage');qr.src=gcashQr;qr.hidden=false;$('#gcashQrPlaceholder').hidden=true;
  qr.onerror=()=>{qr.hidden=true;$('#gcashQrPlaceholder').hidden=false;$('#gcashMerchantStatus').textContent='The configured QR image could not be loaded. Please pay at the clinic and contact staff.'};
 }
+
 const dateInput=$('input[name="date"]');dateInput.min=new Date().toISOString().slice(0,10);
+const doctorSelect=$('#bookingDoctor'),dateSelect=$('#bookingForm [name="date"]'),timeSelect=$('#bookingForm [name="time"]'),availabilityPanel=$('#availabilityPanel');
+const defaultHours={days:['Mon','Tue','Wed','Thu','Fri'],start:'09:00',end:'17:00',breakStart:'10:30',breakEnd:'10:45',lunchStart:'12:00',lunchEnd:'13:00'};
+const readClinic=(key,fallback)=>{try{return JSON.parse(localStorage.getItem('sd_'+key))??fallback}catch{return fallback}};
+const toMinutes=t=>{if(!t)return NaN;const m=String(t).match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);if(!m)return NaN;let hh=Number(m[1]),mm=Number(m[2]);if(m[3]){if(m[3].toUpperCase()==='PM'&&hh!==12)hh+=12;if(m[3].toUpperCase()==='AM'&&hh===12)hh=0}return hh*60+mm};
+const dayShort=date=>new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short'});
+const fmtTime=m=>{let h=Math.floor(m/60),min=m%60;return String((h%12)||12).padStart(2,'0')+':'+String(min).padStart(2,'0')+' '+(h>=12?'PM':'AM')};
+function getClinicSchedule(){return {doctors:readClinic('doctors',[{name:'Dr. Ana Reyes',specialty:'General dentistry'},{name:'Dr. Marco Lim',specialty:'Orthodontics'}]),hours:readClinic('hours',{}),blocks:readClinic('blocks',[]),appointments:readClinic('appts',[])}}
+function populateDentists(){const s=getClinicSchedule(),current=doctorSelect.value;doctorSelect.innerHTML='<option value="">Choose a dentist</option>'+s.doctors.map(d=>'<option value="'+String(d.name).replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'">'+d.name+'</option>').join('');if(current&&s.doctors.some(d=>d.name===current))doctorSelect.value=current;else if(s.doctors.length===1)doctorSelect.value=s.doctors[0].name;checkDentistAvailability()}
+function appointmentMinute(value){return toMinutes(value)}
+function checkDentistAvailability(){
+ if(!availabilityPanel)return;
+ const date=dateSelect.value,time=timeSelect.value,doctor=doctorSelect.value;
+ availabilityPanel.className='availability-panel';
+ if(!date||!time||!doctor){availabilityPanel.textContent='Choose a dentist, date, and time to check availability.';return}
+ const s=getClinicSchedule(),hours=s.hours[doctor]||defaultHours,day=dayShort(date),minute=appointmentMinute(time),duration=30;
+ const blocked=s.blocks.find(b=>b.date===date&&(!b.doctor||b.doctor===doctor));
+ const weekdayNames={Mon:'Monday',Tue:'Tuesday',Wed:'Wednesday',Thu:'Thursday',Fri:'Friday',Sat:'Saturday',Sun:'Sunday'};
+ if(blocked){availabilityPanel.classList.add('unavailable');availabilityPanel.innerHTML='<strong>Not available</strong>'+doctor+' is marked '+(blocked.reason||'unavailable')+' on this date.';return}
+ if(!hours.days?.includes(day)){availabilityPanel.classList.add('unavailable');availabilityPanel.innerHTML='<strong>Not a working day</strong>'+doctor+' does not have working hours set for '+weekdayNames[day]+'.';return}
+ const start=toMinutes(hours.start),end=toMinutes(hours.end);
+ if(!Number.isFinite(start)||!Number.isFinite(end)||minute<start||minute+duration>end){availabilityPanel.classList.add('unavailable');availabilityPanel.innerHTML='<strong>Outside working hours</strong>'+doctor+' schedule is '+fmtTime(start)+'–'+fmtTime(end)+'. Please choose another time.';return}
+ const breaks=[['breakStart','breakEnd','Break'],['lunchStart','lunchEnd','Lunch']].filter(([a,b])=>hours[a]&&hours[b]);
+ const rest=breaks.find(([a,b])=>minute<toMinutes(hours[b])&&minute+duration>toMinutes(hours[a]));
+ if(rest){availabilityPanel.classList.add('unavailable');availabilityPanel.innerHTML='<strong>Unavailable during '+rest[2].toLowerCase()+'</strong>Please choose a time outside '+fmtTime(toMinutes(hours[rest[0]]))+'–'+fmtTime(toMinutes(hours[rest[1]]))+'.';return}
+ const busy=s.appointments.find(a=>a.date===date&&a.doctor===doctor&&!/cancel/i.test(a.status||'')&&Math.abs(appointmentMinute(a.time)-minute)<duration);
+ if(busy){availabilityPanel.classList.add('unavailable');availabilityPanel.innerHTML='<strong>Time slot already has an appointment</strong>'+doctor+' has another booking around '+(busy.time||'this time')+'. Try a different time.';return}
+ availabilityPanel.classList.add('available');availabilityPanel.innerHTML='<strong>Appears available</strong>'+doctor+' works '+fmtTime(start)+'–'+fmtTime(end)+' on '+weekdayNames[day]+'. The clinic must still confirm this request.';
+}
+doctorSelect.addEventListener('change',checkDentistAvailability);dateSelect.addEventListener('change',checkDentistAvailability);timeSelect.addEventListener('change',checkDentistAvailability);
+window.addEventListener('storage',e=>{if(['sd_doctors','sd_hours','sd_blocks','sd_appts'].includes(e.key)){populateDentists()}});
+populateDentists();
+
 function showAuth(mode='login'){authMode=mode;$('#authModal').classList.add('open');$('#authModal').setAttribute('aria-hidden','false');renderAuth()}
 function closeModal(id){$('#'+id).classList.remove('open');$('#'+id).setAttribute('aria-hidden','true')}
 function renderAuth(){const signup=authMode==='signup';$('#authTitle').textContent=signup?'Create your account.':'Welcome back.';$('#authIntro').textContent=signup?'Register to request and manage appointment visits.':'Log in to continue with your appointment request.';$('#authNameWrap').hidden=!signup;$('#authNameWrap input').required=signup;$('#authSubmit').textContent=signup?'Create account':'Log in';document.querySelectorAll('[data-auth-tab]').forEach(b=>b.classList.toggle('active',b.dataset.authTab===authMode));$('#authMessage').textContent=hasConfig?'Your account is securely managed by the clinic portal.':'Demo mode: connect Supabase to enable real customer accounts.'}
