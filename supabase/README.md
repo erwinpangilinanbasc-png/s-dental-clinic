@@ -12,17 +12,18 @@ This folder adds a **server-side reminder foundation**. The existing GitHub Page
 ## Setup
 1. In Supabase Dashboard, open **SQL Editor** and run `migrations/202611170001_appointment_sms_reminders.sql`.
 2. Deploy the Edge Function in `functions/send-appointment-reminders/index.ts` as `send-appointment-reminders`.
-3. In Supabase **Edge Function Secrets**, set:
+3. Deploy the function with `config.toml` so the scheduled server-to-server request can reach the function. The handler independently checks the private key in the `apikey` header.
+4. In Supabase **Edge Function Secrets**, set:
    - `SEMAPHORE_API_KEY` = the API key from the clinic's Semaphore account
    - `SEMAPHORE_SENDER_NAME` = optional approved sender name registered in Semaphore
    Supabase provides `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to deployed functions. Never put these secrets in the website, `config.js`, or GitHub.
-4. In SQL Editor, open `cron-setup.sql`. Replace the project URL and key placeholders in the two `vault.create_secret` statements, then run it. Use the project's service-role/secret key only in the private Supabase SQL Editor/Vault, never in chat or GitHub.
-5. Confirm the Cron job appears in **Integrations → Cron** and inspect Edge Function logs after a due reminder is processed.
-6. Connect the admin appointment create/edit workflow to `public.clinic_appointments` using authenticated staff accounts and role-based Row Level Security. Set `sms_consent=true` only after the patient has agreed to receive reminders. The current browser-only appointment form is not yet connected to this table.
+5. In SQL Editor, open `cron-setup.sql`. Replace the project URL and key placeholders in the two `vault.create_secret` statements, then run it. Use the project's legacy service-role key only in the private Supabase SQL Editor/Vault, never in chat or GitHub. Do not use the public anon key.
+6. Confirm the Cron job appears in **Integrations → Cron** and inspect Edge Function logs after a due reminder is processed.
+7. Connect the admin appointment create/edit workflow to `public.clinic_appointments` using authenticated staff accounts and role-based Row Level Security. Set `sms_consent=true` only after the patient has agreed to receive reminders. The current browser-only appointment form is not yet connected to this table.
 
 ## Important
-- Semaphore's API may queue a message before carrier delivery; a successful API response is not proof the handset received it. Check Semaphore message history for final delivery status.
-- Keep reminder messages minimal; do not include diagnoses, treatment details, or other health information.
+- Semaphore's API returns a queued/pending status when it accepts a message for processing. That is not proof the handset received it; check Semaphore message history for final delivery status.
+- Reminder messages are deliberately minimal and do not include treatment details or health information.
 - Test with a clinic-controlled number and explicit consent before enabling patient reminders.
 - If a reminder fails, it is marked failed for staff review; this version does not automatically retry failed messages, avoiding accidental duplicate SMS.
 - SMS charges and sender-name approval are managed in the clinic's Semaphore account.
