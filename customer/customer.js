@@ -3,6 +3,12 @@ const $=s=>document.querySelector(s), toast=m=>{const t=$('#toast');t.textConten
 const cfg=window.SUPABASE_CONFIG||{}, hasConfig=!!(cfg.url&&cfg.anonKey&&window.supabase), sb=hasConfig?window.supabase.createClient(cfg.url,cfg.anonKey):null;
 let user=null, authMode='login', pendingBooking=null;
 $('#year').textContent=new Date().getFullYear();
+const gcashName=(cfg.gcashMerchantName||'').trim(),gcashQr=(cfg.gcashQrImageUrl||'').trim();
+if(gcashName)$('#gcashMerchantStatus').textContent='Merchant account: '+gcashName+'. Please verify this exact name in GCash before confirming payment.';
+if(gcashQr && (/^https:\/\//i.test(gcashQr)||/^\.\.\//.test(gcashQr)||/^\.\//.test(gcashQr)||/^assets\//.test(gcashQr))){
+ const qr=$('#gcashQrImage');qr.src=gcashQr;qr.hidden=false;$('#gcashQrPlaceholder').hidden=true;
+ qr.onerror=()=>{qr.hidden=true;$('#gcashQrPlaceholder').hidden=false;$('#gcashMerchantStatus').textContent='The configured QR image could not be loaded. Please pay at the clinic and contact staff.'};
+}
 const dateInput=$('input[name="date"]');dateInput.min=new Date().toISOString().slice(0,10);
 function showAuth(mode='login'){authMode=mode;$('#authModal').classList.add('open');$('#authModal').setAttribute('aria-hidden','false');renderAuth()}
 function closeModal(id){$('#'+id).classList.remove('open');$('#'+id).setAttribute('aria-hidden','true')}
