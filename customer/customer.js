@@ -17,7 +17,8 @@ function showReschedulePage(){
  }else root.innerHTML='<div class="availability-panel"><strong>Response already recorded</strong>'+item.status+'. If you need help, contact the clinic directly.</div>';
 }
 showReschedulePage();
-\nconst cfg=window.SUPABASE_CONFIG||{}, hasConfig=!!(cfg.url&&cfg.anonKey&&window.supabase), sb=hasConfig?window.supabase.createClient(cfg.url,cfg.anonKey):null;
+
+const cfg=window.SUPABASE_CONFIG||{}, hasConfig=!!(cfg.url&&cfg.anonKey&&window.supabase), sb=hasConfig?window.supabase.createClient(cfg.url,cfg.anonKey):null;
 let user=null, authMode='login', pendingBooking=null;
 $('#year').textContent=new Date().getFullYear();
 const gcashName=(cfg.gcashMerchantName||'').trim(),gcashQr=(cfg.gcashQrImageUrl||'').trim();
