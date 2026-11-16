@@ -26,12 +26,14 @@ function doctorsPage(){return '<div class="two-col"><div class="panel"><div clas
 function timeMinutes(value){const m=String(value||'').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);if(!m)return NaN;let h=+m[1],n=+m[2];if(m[3]){if(m[3].toUpperCase()==='PM'&&h!==12)h+=12;if(m[3].toUpperCase()==='AM'&&h===12)h=0}return h*60+n}
 function displayTime(min){let h=Math.floor(min/60),m=min%60;return String((h%12)||12).padStart(2,'0')+':'+String(m).padStart(2,'0')+' '+(h>=12?'PM':'AM')}
 function nearestReplacementSlot(original,requests){
- const duration=30,startAt=new Date(original.date+'T00:00:00');startAt.setMinutes(timeMinutes(original.time)+duration);
+ const duration=30,originalMinute=timeMinutes(original.time),base=new Date(original.date+'T00:00:00');
  for(let offset=0;offset<60;offset++){
-  const day=new Date(startAt);day.setDate(day.getDate()+offset);
+  const day=new Date(base);day.setDate(day.getDate()+offset);
   const date=[day.getFullYear(),String(day.getMonth()+1).padStart(2,'0'),String(day.getDate()).padStart(2,'0')].join('-');
   const weekday=day.toLocaleDateString('en-US',{weekday:'short'});
-  for(let minute=(offset===0?Math.ceil((startAt.getHours()*60+startAt.getMinutes())/30)*30:9*60);minute<=17*60-duration;minute+=30){
+  const candidates=Array.from({length:17},(_,i)=>9*60+i*30).filter(m=>m+duration<=17*60);
+  if(offset===0)candidates.sort((a,b)=>Math.abs(a-originalMinute)-Math.abs(b-originalMinute));
+  for(const minute of candidates){
    for(const d of doctors){
     const h=hours[d.name]||{days:['Mon','Tue','Wed','Thu','Fri'],start:'09:00',end:'17:00',breakStart:'10:30',breakEnd:'10:45',lunchStart:'12:00',lunchEnd:'13:00'};
     if(!h.days?.includes(weekday)||minute<timeMinutes(h.start)||minute+duration>timeMinutes(h.end))continue;
