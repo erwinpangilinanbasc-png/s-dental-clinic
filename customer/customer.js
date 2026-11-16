@@ -58,7 +58,7 @@ function submitDemoBooking(data){
  // Demo bridge: the staff dashboard reads these same-origin localStorage keys.
  // This only syncs on the same browser/device; it is not a cross-device clinic database.
  const appts=JSON.parse(localStorage.getItem('sd_appts')||'[]');
- appts.push({date:data.date,time:data.time,patient:data.name,treatment:data.service,doctor:'To be assigned',status:'Pending',customerEmail:data.email,customerPhone:data.phone,customerRequest:true});
+ appts.push({date:data.date,time:data.time,patient:data.name,treatment:data.service,doctor:data.doctor,status:'Pending',customerEmail:data.email,customerPhone:data.phone,customerRequest:true});
  localStorage.setItem('sd_appts',JSON.stringify(appts));
  const patients=JSON.parse(localStorage.getItem('sd_patients')||'[]');
  if(!patients.some(p=>(p.email&&p.email.toLowerCase()===data.email.toLowerCase())||p.name.toLowerCase()===data.name.toLowerCase())){
