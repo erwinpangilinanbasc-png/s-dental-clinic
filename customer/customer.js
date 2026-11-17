@@ -18,7 +18,8 @@ function showReschedulePage(){
 }
 showReschedulePage();
 
-const cfg=window.SUPABASE_CONFIG||{}, hasConfig=!!(cfg.url&&cfg.anonKey&&window.supabase), sb=hasConfig?window.supabase.createClient(cfg.url,cfg.anonKey):null;
+const cfg=window.SUPABASE_CONFIG||{}, hasConfig=!!(cfg.url&&cfg.anonKey&&window.supabase);
+sb=hasConfig?window.supabase.createClient(cfg.url,cfg.anonKey):null;
 let user=null, authMode='login', pendingBooking=null;
 $('#year').textContent=new Date().getFullYear();
 const planModal=$('#planRequestModal'),planForm=$('#planRequestForm');
@@ -39,6 +40,7 @@ if(gcashQr && (/^https:\/\//i.test(gcashQr)||/^\.\.\//.test(gcashQr)||/^\.\//.te
  qr.onerror=()=>{qr.hidden=true;$('#gcashQrPlaceholder').hidden=false;$('#gcashMerchantStatus').textContent='The configured QR image could not be loaded. Please pay at the clinic and contact staff.'};
 }
 
+let sb=null;
 const dateInput=$('input[name="date"]');dateInput.min=new Date().toISOString().slice(0,10);
 const doctorSelect=$('#bookingDoctor'),dateSelect=$('#bookingForm [name="date"]'),timeSelect=$('#bookingForm [name="time"]'),availabilityPanel=$('#availabilityPanel');
 const defaultHours={days:['Mon','Tue','Wed','Thu','Fri'],start:'09:00',end:'17:00',breakStart:'10:30',breakEnd:'10:45',lunchStart:'12:00',lunchEnd:'13:00'};
@@ -96,7 +98,7 @@ function updatePaymentPreview(){
 $('#bookingForm [name="service"]').addEventListener('change',updatePaymentPreview);
 $('#bookingPaymentMethod').addEventListener('change',updatePaymentPreview);
 function toDatabaseTime(value){
- const m=String(value||'').match(/(\\d{1,2}):(\\d{2})\\s*(AM|PM)?/i);
+ const m=String(value||'').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
  if(!m)throw new Error('Please choose a valid appointment time.');
  let h=Number(m[1]),min=Number(m[2]);
  if(m[3]){if(m[3].toUpperCase()==='PM'&&h!==12)h+=12;if(m[3].toUpperCase()==='AM'&&h===12)h=0}
