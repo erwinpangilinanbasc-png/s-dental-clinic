@@ -106,3 +106,114 @@ function bind(){
 function filterPatients(){let q=$('#psearch').value.toLowerCase(),s=$('#pstatus').value;$('#prows').innerHTML=patientRows(patients.filter(p=>(p.name.toLowerCase().includes(q)||p.id.toLowerCase().includes(q))&&(!s||p.status===s)))}
 $('#mainNav').onclick=e=>{let b=e.target.closest('[data-page]');if(b)go(b.dataset.page)};$('#quickAdd').onclick=()=>apptModal();$('#mobileMenu').onclick=()=>$('#sidebar').classList.toggle('open');$('#closeModal').onclick=()=>$('#modalBackdrop').classList.remove('open');$('#modalBackdrop').onclick=e=>{if(e.target.id==='modalBackdrop')$('#modalBackdrop').classList.remove('open')};$('#todayLabel').textContent=new Date().toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric',year:'numeric'});go('dashboard');
 if(window.SUPABASE_CONFIG?.url&&window.SUPABASE_CONFIG?.anonKey&&window.supabase){window.clinicSupabase=window.supabase.createClient(window.SUPABASE_CONFIG.url,window.SUPABASE_CONFIG.anonKey)}
+
+
+// --- Supabase team authentication and role-based demo navigation ---
+let clinicSession=null, clinicProfile=null, clinicRole=null;
+const ROLE_PAGES={
+ admin:['dashboard','patients','payments','planRequests','activities','reports','schedule','doctors','doctorSchedule','checklist'],
+ doctor:['dashboard','patients','schedule','doctorSchedule','checklist'],
+ staff:['dashboard','patients','schedule','doctorSchedule','checklist']
+};
+function roleCan(pageName){return !!clinicRole && (ROLE_PAGES[clinicRole]||[]).includes(pageName)}
+const originalGo=go;
+go=function(nextPage){
+ if(clinicRole&&!roleCan(nextPage)){toast('Your account does not have access to that page.');return}
+ originalGo(nextPage);
+ if(clinicRole==='staff'&&nextPage==='schedule')makeScheduleReadOnly();
+ if(clinicRole==='staff'&&nextPage==='doctorSchedule')makeDoctorScheduleReadOnly();
+ if(clinicRole==='doctor'&&nextPage==='schedule')filterDoctorSchedule();
+ if(clinicRole==='doctor'&&nextPage==='doctorSchedule')makeDoctorOwnSchedule();
+};
+const originalRender=render;
+render=function(){
+ if(!clinicRole)return;
+ document.querySelectorAll('#mainNav [data-page]').forEach(b=>{b.hidden=!roleCan(b.dataset.page)});
+ $('#quickAdd').hidden=clinicRole!=='admin';
+ if(clinicRole==='staff'&&page==='schedule'){
+   $('#pageContent').innerHTML=staffScheduleMarkup();
+   bind();
+   makeScheduleReadOnly();
+   return;
+ }
+ if(clinicRole==='staff'&&page==='doctorSchedule'){
+   $('#pageContent').innerHTML=staffDoctorScheduleMarkup();
+   return;
+ }
+ originalRender();
+ if(clinicRole==='staff'){
+   document.querySelectorAll('[data-edit],[data-unblock],[data-doctor-schedule],[data-act="addAppt"],[data-act="addDoctor"]').forEach(b=>b.remove());
+   if(page==='patients')document.querySelectorAll('[data-pedit]').forEach(b=>b.textContent='View');
+   if(page==='dashboard')document.querySelectorAll('[data-edit]').forEach(b=>b.remove());
+ }
+ if(clinicRole==='doctor'){
+   document.querySelectorAll('[data-act="addAppt"],[data-edit],[data-unblock],[data-act="addDoctor"],[data-act="clearLog"],[data-act="generateReport"]').forEach(b=>b.remove());
+   if(page==='patients')document.querySelectorAll('[data-pedit]').forEach(b=>b.textContent='View');
+ }
+};
+function staffScheduleMarkup(){
+ const list=appointments.slice().sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
+ return '<div class="panel"><div class="panel-head"><div><h2>Appointment schedule</h2><p class="muted">Staff access is view-only. Appointment changes are handled by an administrator.</p></div></div><div class="toolbar"><label class="field">Date<input id="sdate" type="date" value="'+today()+'"></label><select id="sdoctor"><option value="">All doctors</option>'+doctors.map(d=>'<option>'+esc(d.name)+'</option>').join('')+'</select></div><div class="table-wrap"><table><thead><tr><th>TIME</th><th>PATIENT</th><th>TREATMENT</th><th>DOCTOR</th><th>STATUS</th><th>PAYMENT METHOD / STATUS</th></tr></thead><tbody id="srows">'+list.filter(x=>x.date===today()).map(x=>'<tr><td>'+esc(x.time)+'</td><td>'+esc(x.patient)+'</td><td>'+esc(x.treatment)+'</td><td>'+esc(x.doctor)+'</td><td>'+badge(x.status)+'</td><td>'+esc(x.paymentMethod||'—')+'<br><small class="muted">'+esc(x.paymentStatus||'Not recorded')+'</small></td></tr>').join('')+'</tbody></table></div></div>';
+}
+function makeScheduleReadOnly(){
+ const refresh=()=>{const d=$('#sdate')?.value||today(),doc=$('#sdoctor')?.value||'';$('#srows').innerHTML=appointments.filter(x=>x.date===d&&(!doc||x.doctor===doc)).map(x=>'<tr><td>'+esc(x.time)+'</td><td>'+esc(x.patient)+'</td><td>'+esc(x.treatment)+'</td><td>'+esc(x.doctor)+'</td><td>'+badge(x.status)+'</td><td>'+esc(x.paymentMethod||'—')+'<br><small class="muted">'+esc(x.paymentStatus||'Not recorded')+'</small></td></tr>').join('')||'<tr><td colspan="6" class="empty">No appointments found.</td></tr>'};
+ if($('#sdate'))$('#sdate').onchange=refresh;if($('#sdoctor'))$('#sdoctor').onchange=refresh;
+}
+function staffDoctorScheduleMarkup(){
+ return '<div class="panel"><div class="panel-head"><div><h2>Doctor availability</h2><p class="muted">View-only schedule information for clinic staff.</p></div></div><div class="toolbar"><select id="staffDoctorSelect">'+doctors.map(d=>'<option>'+esc(d.name)+'</option>').join('')+'</select></div><div id="staffDoctorInfo"></div></div>';
+}
+function renderStaffDoctorInfo(){
+ const name=$('#staffDoctorSelect')?.value||doctors[0]?.name,h=hours[name]||{days:['Mon','Tue','Wed','Thu','Fri'],start:'09:00',end:'17:00',breakStart:'10:30',breakEnd:'10:45',lunchStart:'12:00',lunchEnd:'13:00'};
+ $('#staffDoctorInfo').innerHTML='<h3>'+esc(name)+'</h3><p><b>Working days:</b> '+esc((h.days||[]).join(', '))+'</p><p><b>Hours:</b> '+esc(h.start)+' – '+esc(h.end)+'</p><p><b>Break:</b> '+esc(h.breakStart)+' – '+esc(h.breakEnd)+'</p><p><b>Lunch:</b> '+esc(h.lunchStart)+' – '+esc(h.lunchEnd)+'</p><h3>Unavailable dates</h3>'+(blocks.filter(b=>!b.doctor||b.doctor===name).map(b=>'<p>'+fmt(b.date)+' · '+esc(b.reason)+'</p>').join('')||'<p class="muted">No blocked dates recorded.</p>');
+}
+function makeDoctorScheduleReadOnly(){const s=$('#staffDoctorSelect');if(s){s.onchange=renderStaffDoctorInfo;renderStaffDoctorInfo()}}
+function filterDoctorSchedule(){
+ if(!clinicProfile?.doctor_name)return;
+ appointments=appointments.filter(x=>x.doctor===clinicProfile.doctor_name);
+}
+function makeDoctorOwnSchedule(){
+ const form=$('#hoursForm');if(form){form.querySelectorAll('input,select,button').forEach(x=>x.disabled=true);const sel=$('#hoursDoctor');if(sel){sel.value=clinicProfile?.doctor_name||sel.value;sel.disabled=true}}
+ const block=$('#blockform');if(block)block.remove();
+ document.querySelectorAll('[data-unblock]').forEach(x=>x.remove());
+}
+function showAuth(message=''){
+ $('#authGate').style.display='grid';document.querySelector('.app-shell').style.display='none';
+ $('#loginMessage').textContent=message;
+}
+function showApp(){
+ $('#authGate').style.display='none';document.querySelector('.app-shell').style.display='flex';
+ $('#signedInName').textContent=clinicProfile?.display_name||clinicSession?.user?.email||'Team member';
+ $('#signedInRole').textContent=(clinicRole||'').toUpperCase()+' ACCESS';
+ render();go('dashboard');
+}
+async function loadClinicProfile(session){
+ clinicSession=session;
+ const {data,error}=await window.clinicSupabase.from('clinic_staff').select('display_name,role,doctor_name').eq('user_id',session.user.id).maybeSingle();
+ if(error)throw error;
+ if(!data)throw new Error('Your account has no clinic role yet. Ask the administrator to assign your role in the Supabase setup.');
+ if(!['admin','doctor','staff'].includes(data.role))throw new Error('This account has an unsupported role.');
+ clinicProfile=data;clinicRole=data.role;
+}
+async function startClinicAuth(){
+ if(!window.clinicSupabase){showAuth('Supabase connection is not configured. Check config.js and reload.');return}
+ const {data:{session},error}=await window.clinicSupabase.auth.getSession();
+ if(error){showAuth(error.message);return}
+ if(session){
+  try{await loadClinicProfile(session);showApp()}catch(e){await window.clinicSupabase.auth.signOut();showAuth(e.message)}
+ }else showAuth();
+}
+$('#loginForm').addEventListener('submit',async e=>{
+ e.preventDefault();const f=new FormData(e.currentTarget),button=$('#loginButton');button.disabled=true;button.textContent='Signing in…';$('#loginMessage').textContent='';
+ try{
+  const {data,error}=await window.clinicSupabase.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});
+  if(error)throw error;
+  await loadClinicProfile(data.session);showApp();
+ }catch(err){$('#loginMessage').textContent=err.message||'Unable to sign in.'}
+ finally{button.disabled=false;button.textContent='Sign in'}
+});
+$('#logoutButton').addEventListener('click',async()=>{await window.clinicSupabase.auth.signOut();clinicSession=null;clinicProfile=null;clinicRole=null;showAuth('You have signed out.')});
+if(window.clinicSupabase){window.clinicSupabase.auth.onAuthStateChange(async(event,session)=>{
+ if(event==='SIGNED_OUT'){clinicSession=null;clinicProfile=null;clinicRole=null;showAuth()}
+})}
+document.querySelector('.app-shell').style.display='none';
+startClinicAuth();
