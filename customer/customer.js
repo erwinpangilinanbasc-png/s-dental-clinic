@@ -93,14 +93,14 @@ $('#bookingForm').onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(
 $('#menuToggle').onclick=()=>$('#mainNav').classList.toggle('open');document.querySelectorAll('#mainNav a').forEach(a=>a.onclick=()=>$('#mainNav').classList.remove('open'));
 const answers=[
 [/book|appointment|schedule/i,'To request a visit, create an account, complete the appointment form, and choose your preferred date and time. The clinic must confirm availability before your appointment is final.'],
-[/service|treatment|clean|filling|braces|orthodont/i,'The portal lists consultation, oral cleaning, tooth restoration, and orthodontic consultation as example service categories. Please contact the clinic to confirm the treatments currently offered.'],
+[/service|treatment|clean|filling|braces|orthodont/i,'The portal lists consultation, oral cleaning, tooth restoration, and orthodontic consultation. Please contact the clinic to confirm currently available treatments.'],
 [/pay|payment|qr|bill|balance/i,'Please use only the clinic’s official payment instructions. Verify the recipient and amount before paying. The official clinic QR code has not been configured on this demo portal yet.'],
 [/hour|open|location|address|contact|phone/i,'Clinic opening hours, address, and contact details have not yet been added to this demo. Please check directly with S Dental Clinic for the latest information.'],
-[/price|cost|promo|offer|plan/i,'The plans shown are sample descriptions, not active promotions or confirmed prices. Contact the clinic for current prices, availability, and inclusions.'],
+[/price|cost|promo|offer|plan/i,'For current prices and payment options, please contact S Dental Clinic directly.'],
 [/cancel|resched|change/i,'For cancellations or schedule changes, please contact the clinic directly. Online request management will be enabled after the clinic booking database is connected.'],
 [/emergency|pain|hurt|swollen/i,'I can only provide general clinic information, not diagnose or assess symptoms. For urgent concerns, contact a qualified dental professional or seek appropriate urgent care.']
 ];
-function botReply(q){const hit=answers.find(([re])=>re.test(q));return hit?hit[1]:'I can help with general questions about appointments, services, payment steps, plans, and clinic information. Try asking “How do I book an appointment?”';}
+function botReply(q){const hit=answers.find(([re])=>re.test(q));return hit?hit[1]:'I can help with general questions about appointments, services, payment steps, and clinic information. Try asking “How do I book an appointment?”';}
 function sendChat(q){if(!q.trim())return;const box=$('#chatMessages');const u=document.createElement('div');u.className='user-message';u.textContent=q;box.append(u);const b=document.createElement('div');b.className='bot-message';b.textContent=botReply(q);box.append(b);box.scrollTop=box.scrollHeight}
 $('#openChat').onclick=()=>{$('#chatPanel').classList.add('open');$('#chatPanel').setAttribute('aria-hidden','false')};$('#closeChat').onclick=()=>{$('#chatPanel').classList.remove('open');$('#chatPanel').setAttribute('aria-hidden','true')};$('#chatForm').onsubmit=e=>{e.preventDefault();const f=e.currentTarget,q=f.message.value;sendChat(q);f.reset()};document.querySelectorAll('[data-question]').forEach(b=>b.onclick=()=>sendChat(b.dataset.question));
 })();
