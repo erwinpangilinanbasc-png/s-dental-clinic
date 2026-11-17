@@ -123,6 +123,7 @@ go=function(nextPage){
  if(clinicRole==='staff'&&nextPage==='schedule')makeScheduleReadOnly();
  if(clinicRole==='staff'&&nextPage==='doctorSchedule')makeDoctorScheduleReadOnly();
  if(clinicRole==='doctor'&&nextPage==='schedule')filterDoctorSchedule();
+ if(clinicRole==='doctor'&&nextPage==='doctorSchedule'&&clinicProfile?.doctor_name)selectedScheduleDoctor=clinicProfile.doctor_name;
  if(clinicRole==='doctor'&&nextPage==='doctorSchedule')makeDoctorOwnSchedule();
 };
 const originalRender=render;
