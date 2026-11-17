@@ -214,21 +214,26 @@ async function syncSharedAppointments(){
 async function syncSharedDoctorSchedules(){
  if(!window.clinicSupabase||!clinicSession)return;
  const client=window.clinicSupabase,canManage=clinicRole==='admin'||clinicRole==='doctor';
+ let {data:schedules,error:scheduleError}=await client.from('clinic_doctor_schedules').select('doctor_name,working_days,start_time,end_time,break_start,break_end,lunch_start,lunch_end');
+ if(scheduleError)throw scheduleError;
  if(canManage){
-  const localHours=Object.entries(hours||{}).filter(([name])=>clinicRole!=='doctor'||name===clinicProfile?.doctor_name);
+  // Import browser-only working hours only when a shared row does not exist.
+  // This prevents stale localStorage from overwriting newer clinic-wide settings.
+  const existing=new Set((schedules||[]).map(s=>s.doctor_name));
+  const localHours=Object.entries(hours||{}).filter(([name])=>(clinicRole!=='doctor'||name===clinicProfile?.doctor_name)&&!existing.has(name));
   for(const [name,h] of localHours){
-   const {error}=await client.from('clinic_doctor_schedules').upsert({doctor_name:name,working_days:h.days||[],start_time:h.start||'09:00',end_time:h.end||'17:00',break_start:h.breakStart||null,break_end:h.breakEnd||null,lunch_start:h.lunchStart||null,lunch_end:h.lunchEnd||null},{onConflict:'doctor_name'});
-   if(error)throw error;
+   const {error}=await client.from('clinic_doctor_schedules').insert({doctor_name:name,working_days:h.days||[],start_time:h.start||'09:00',end_time:h.end||'17:00',break_start:h.breakStart||null,break_end:h.breakEnd||null,lunch_start:h.lunchStart||null,lunch_end:h.lunchEnd||null});
+   if(error&&error.code!=='23505')throw error;
   }
   const localBlocks=(blocks||[]).filter(b=>!b.dbId&&(clinicRole!=='doctor'||b.doctor===clinicProfile?.doctor_name));
   for(const b of localBlocks){const {error}=await client.from('clinic_doctor_blocks').upsert({doctor_name:b.doctor,blocked_date:b.date,reason:b.reason||'Unavailable'},{onConflict:'doctor_name,blocked_date',ignoreDuplicates:true});if(error)throw error}
  }
- const [{data:schedules,error:scheduleError},{data:sharedBlocks,error:blockError}]=await Promise.all([
+ const [{data:sharedSchedules,error:sharedScheduleError},{data:sharedBlocks,error:blockError}]=await Promise.all([
   client.from('clinic_doctor_schedules').select('doctor_name,working_days,start_time,end_time,break_start,break_end,lunch_start,lunch_end'),
   client.from('clinic_doctor_blocks').select('id,doctor_name,blocked_date,reason')
  ]);
- if(scheduleError)throw scheduleError;if(blockError)throw blockError;
- hours={};(schedules||[]).forEach(s=>{hours[s.doctor_name]={days:s.working_days||[],start:s.start_time,end:s.end_time,breakStart:s.break_start||'',breakEnd:s.break_end||'',lunchStart:s.lunch_start||'',lunchEnd:s.lunch_end||''}});
+ if(sharedScheduleError)throw sharedScheduleError;if(blockError)throw blockError;
+ hours={};(sharedSchedules||[]).forEach(s=>{hours[s.doctor_name]={days:s.working_days||[],start:s.start_time,end:s.end_time,breakStart:s.break_start||'',breakEnd:s.break_end||'',lunchStart:s.lunch_start||'',lunchEnd:s.lunch_end||''}});
  blocks=(sharedBlocks||[]).map(b=>({dbId:b.id,doctor:b.doctor_name,date:b.blocked_date,reason:b.reason}));
  localStorage.setItem('sd_hours',JSON.stringify(hours));localStorage.setItem('sd_blocks',JSON.stringify(blocks));
 }
