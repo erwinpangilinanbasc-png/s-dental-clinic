@@ -8,20 +8,8 @@ alter table public.clinic_staff
 drop policy if exists "Doctors manage own auto-confirm preference" on public.clinic_staff;
 create policy "Doctors manage own auto-confirm preference"
 on public.clinic_staff for update to authenticated
-using (
-  (auth.uid() = user_id and role = 'doctor')
-  or exists (
-    select 1 from public.clinic_staff me
-    where me.user_id = auth.uid() and me.role = 'admin'
-  )
-)
-with check (
-  (auth.uid() = user_id and role = 'doctor')
-  or exists (
-    select 1 from public.clinic_staff me
-    where me.user_id = auth.uid() and me.role = 'admin'
-  )
-);
+using (auth.uid() = user_id and role = 'doctor')
+with check (auth.uid() = user_id and role = 'doctor');
 grant update (auto_confirm_appointments) on public.clinic_staff to authenticated;
 
 create table if not exists public.clinic_doctor_schedules (
