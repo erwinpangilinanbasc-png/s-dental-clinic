@@ -242,6 +242,8 @@ async function migrateLegacyAppointments(){
  const rows=legacy.map((a,i)=>({source_legacy_id:'legacy-'+i+'-'+String(a.date||'').replace(/[^0-9]/g,'')+'-'+String(a.time||'').replace(/[^0-9]/g,'')+'-'+encodeURIComponent(a.patient||'').slice(0,45),customer_name:a.patient||'Legacy appointment',customer_email:a.customerEmail||'',customer_phone:a.customerPhone||a.contact||'',service:a.treatment||'Consultation',notes:a.notes||null,doctor_name:a.doctor||'Dr. Ana Reyes',appointment_date:a.date,appointment_time:(()=>{const n=timeMinutes(a.time);return Number.isFinite(n)?String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')+':00':'09:00:00'})(),payment_method:a.paymentMethod||'Pay at clinic',payment_status:a.paymentStatus||'Pending',status:['Pending','Confirmed','Cancelled'].includes(a.status)?a.status:'Pending'}));
  const {data,error}=await window.clinicSupabase.rpc('migrate_legacy_appointments',{p_rows:rows});
  if(error)throw error;
+ appointments=appointments.filter(a=>a.dbId);
+ save();
  if(data?.inserted>0)toast(data.inserted+' older appointment(s) migrated to the shared database.');
 }
 function showAuth(message=''){
