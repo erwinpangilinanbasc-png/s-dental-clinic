@@ -49,7 +49,7 @@ with check (
     select 1 from public.clinic_staff s
     where s.user_id = auth.uid()
       and (s.role = 'admin' or
-        (s.role = 'doctor' and s.doctor_name = clinic_doctor_schedules.doctor_name))
+        (s.role = 'doctor' and s.doctor_name = clinic_doctor_blocks.doctor_name))
   )
 );
 
