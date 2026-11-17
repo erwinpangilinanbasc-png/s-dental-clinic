@@ -143,7 +143,7 @@ render=function(){
  originalRender();
  if(clinicRole==='staff'){
    document.querySelectorAll('[data-edit],[data-unblock],[data-doctor-schedule],[data-act="addAppt"],[data-act="addDoctor"]').forEach(b=>b.remove());
-   if(page==='patients')document.querySelectorAll('[data-pedit]').forEach(b=>b.textContent='View');
+   if(page==='patients')document.querySelectorAll('[data-pedit]').forEach(b=>{b.textContent='View';b.onclick=()=>patientViewModal(patients[+b.dataset.pedit])});
    if(page==='dashboard')document.querySelectorAll('[data-edit]').forEach(b=>b.remove());
  }
  if(clinicRole==='doctor'){
@@ -169,12 +169,18 @@ function renderStaffDoctorInfo(){
 function makeDoctorScheduleReadOnly(){const s=$('#staffDoctorSelect');if(s){s.onchange=renderStaffDoctorInfo;renderStaffDoctorInfo()}}
 function filterDoctorSchedule(){
  if(!clinicProfile?.doctor_name)return;
- appointments=appointments.filter(x=>x.doctor===clinicProfile.doctor_name);
+ const sel=$('#sdoctor');if(sel){sel.innerHTML='<option>'+esc(clinicProfile.doctor_name)+'</option>';sel.disabled=true}
+ const refresh=()=>{const d=$('#sdate')?.value||today();$('#srows').innerHTML=appointments.filter(x=>x.date===d&&x.doctor===clinicProfile.doctor_name).map(x=>'<tr><td>'+esc(x.time)+'</td><td>'+esc(x.patient)+'</td><td>'+esc(x.treatment)+'</td><td>'+esc(x.doctor)+'</td><td>'+badge(x.status)+'</td><td>'+esc(x.paymentMethod||'—')+'<br><small class="muted">'+esc(x.paymentStatus||'Not recorded')+'</small></td></tr>').join('')||'<tr><td colspan="6" class="empty">No appointments found.</td></tr>'};
+ if($('#sdate'))$('#sdate').onchange=refresh;refresh();
 }
 function makeDoctorOwnSchedule(){
- const form=$('#hoursForm');if(form){form.querySelectorAll('input,select,button').forEach(x=>x.disabled=true);const sel=$('#hoursDoctor');if(sel){sel.value=clinicProfile?.doctor_name||sel.value;sel.disabled=true}}
- const block=$('#blockform');if(block)block.remove();
- document.querySelectorAll('[data-unblock]').forEach(x=>x.remove());
+ const own=clinicProfile?.doctor_name;if(!own)return;
+ const sel=$('#hoursDoctor');if(sel){sel.innerHTML='<option>'+esc(own)+'</option>';sel.value=own;sel.disabled=true}
+ const blockDoctor=$('#blockform select[name="doctor"]');if(blockDoctor){blockDoctor.innerHTML='<option>'+esc(own)+'</option>';blockDoctor.value=own}
+}
+function patientViewModal(p){
+ if(!p)return;
+ modal('Patient profile','<div class="field"><label>Patient ID</label><p>'+esc(p.id)+'</p></div><div class="field"><label>Patient name</label><p>'+esc(p.name)+'</p></div><div class="field"><label>Contact number</label><p>'+esc(p.contact)+'</p></div><div class="field"><label>Last visit</label><p>'+esc(p.last||'—')+'</p></div><div class="field"><label>Status</label><p>'+esc(p.status||'—')+'</p></div><p class="muted">View-only patient profile.</p>');
 }
 function showAuth(message=''){
  $('#authGate').style.display='grid';document.querySelector('.app-shell').style.display='none';
