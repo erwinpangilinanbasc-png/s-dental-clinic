@@ -49,24 +49,29 @@ const fmtTime=m=>{let h=Math.floor(m/60),min=m%60;return String((h%12)||12).padS
 function getClinicSchedule(){return {doctors:readClinic('doctors',[{name:'Dr. Ana Reyes',specialty:'General dentistry'},{name:'Dr. Marco Lim',specialty:'Orthodontics'}]),hours:readClinic('hours',{}),blocks:readClinic('blocks',[]),appointments:readClinic('appts',[])}}
 function populateDentists(){const s=getClinicSchedule(),current=doctorSelect.value;doctorSelect.innerHTML='<option value="">Choose a dentist</option>'+s.doctors.map(d=>'<option value="'+String(d.name).replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'">'+d.name+'</option>').join('');if(current&&s.doctors.some(d=>d.name===current))doctorSelect.value=current;else if(s.doctors.length===1)doctorSelect.value=s.doctors[0].name;checkDentistAvailability()}
 function appointmentMinute(value){return toMinutes(value)}
-function checkDentistAvailability(){
+async function checkDentistAvailability(){
  if(!availabilityPanel)return;
  const date=dateSelect.value,time=timeSelect.value,doctor=doctorSelect.value;
  availabilityPanel.className='availability-panel';
  if(!date||!time||!doctor){availabilityPanel.textContent='Choose a dentist, date, and time to check availability.';return}
- const s=getClinicSchedule(),hours=s.hours[doctor]||defaultHours,day=dayShort(date),minute=appointmentMinute(time),duration=30;
- const blocked=s.blocks.find(b=>b.date===date&&(!b.doctor||b.doctor===doctor));
- const weekdayNames={Mon:'Monday',Tue:'Tuesday',Wed:'Wednesday',Thu:'Thursday',Fri:'Friday',Sat:'Saturday',Sun:'Sunday'};
- if(blocked){availabilityPanel.classList.add('unavailable');availabilityPanel.innerHTML='<strong>Not available</strong>'+doctor+' is marked '+(blocked.reason||'unavailable')+' on this date.';return}
- if(!hours.days?.includes(day)){availabilityPanel.classList.add('unavailable');availabilityPanel.innerHTML='<strong>Not a working day</strong>'+doctor+' does not have working hours set for '+weekdayNames[day]+'.';return}
- const start=toMinutes(hours.start),end=toMinutes(hours.end);
- if(!Number.isFinite(start)||!Number.isFinite(end)||minute<start||minute+duration>end){availabilityPanel.classList.add('unavailable');availabilityPanel.innerHTML='<strong>Outside working hours</strong>'+doctor+' schedule is '+fmtTime(start)+'–'+fmtTime(end)+'. Please choose another time.';return}
- const breaks=[['breakStart','breakEnd','Break'],['lunchStart','lunchEnd','Lunch']].filter(([a,b])=>hours[a]&&hours[b]);
- const rest=breaks.find(([a,b])=>minute<toMinutes(hours[b])&&minute+duration>toMinutes(hours[a]));
- if(rest){availabilityPanel.classList.add('unavailable');availabilityPanel.innerHTML='<strong>Unavailable during '+rest[2].toLowerCase()+'</strong>Please choose a time outside '+fmtTime(toMinutes(hours[rest[0]]))+'–'+fmtTime(toMinutes(hours[rest[1]]))+'.';return}
- const busy=s.appointments.find(a=>a.date===date&&a.doctor===doctor&&!/cancel/i.test(a.status||'')&&Math.abs(appointmentMinute(a.time)-minute)<duration);
- if(busy){availabilityPanel.classList.add('unavailable');availabilityPanel.innerHTML='<strong>Time slot already has an appointment</strong>'+doctor+' has another booking around '+(busy.time||'this time')+'. Try a different time.';return}
- availabilityPanel.classList.add('available');availabilityPanel.innerHTML='<strong>Appears available</strong>'+doctor+' works '+fmtTime(start)+'–'+fmtTime(end)+' on '+weekdayNames[day]+'. The clinic must still confirm this request.';
+ if(!sb){availabilityPanel.classList.add('unavailable');availabilityPanel.textContent='Clinic availability cannot be verified until the database connection is configured.';return}
+ availabilityPanel.textContent='Checking the clinic schedule…';
+ try{
+  const {data,error}=await sb.rpc('check_customer_booking_slot',{
+   p_doctor_name:doctor,p_date:date,p_time:toDatabaseTime(time),p_duration_minutes:30
+  });
+  if(error)throw error;
+  if(data?.available){
+   availabilityPanel.classList.add('available');
+   availabilityPanel.innerHTML='<strong>Available</strong>'+doctor+' has an open slot at '+time+'. The appointment will be automatically confirmed only if this dentist has enabled that setting; otherwise it will remain pending.';
+  }else{
+   availabilityPanel.classList.add('unavailable');
+   availabilityPanel.innerHTML='<strong>Not available</strong>'+String(data?.reason||'Please choose another time.');
+  }
+ }catch(err){
+  availabilityPanel.classList.add('unavailable');
+  availabilityPanel.innerHTML='<strong>Unable to check availability</strong>'+String(err.message||'Please try again.');
+ }
 }
 doctorSelect.addEventListener('change',checkDentistAvailability);dateSelect.addEventListener('change',checkDentistAvailability);timeSelect.addEventListener('change',checkDentistAvailability);
 window.addEventListener('storage',e=>{if(['sd_doctors','sd_hours','sd_blocks','sd_appts'].includes(e.key)){populateDentists()}});
@@ -90,30 +95,41 @@ function updatePaymentPreview(){
 }
 $('#bookingForm [name="service"]').addEventListener('change',updatePaymentPreview);
 $('#bookingPaymentMethod').addEventListener('change',updatePaymentPreview);
-function submitDemoBooking(data){
- const now=new Date().toISOString(),stamp=Date.now(),appointmentId='APT-'+String(stamp).slice(-8),invoiceId='INV-'+String(stamp).slice(-8),amount=sampleAmount(data.service);
- const requests=JSON.parse(localStorage.getItem('sd_customer_requests')||'[]');
- requests.unshift({...data,appointmentId,invoiceId,sampleAmount:amount,createdAt:now,status:'Pending'});
- localStorage.setItem('sd_customer_requests',JSON.stringify(requests));
- // Demo bridge: same-browser localStorage only; this is not cross-device database sync.
- const appts=JSON.parse(localStorage.getItem('sd_appts')||'[]');
- appts.push({id:appointmentId,date:data.date,time:data.time,patient:data.name,treatment:data.service,doctor:data.doctor,status:'Pending',customerEmail:data.email,customerPhone:data.phone,customerRequest:true,paymentMethod:data.paymentMethod,paymentStatus:'Pending',invoiceId,sampleAmount:amount});
- localStorage.setItem('sd_appts',JSON.stringify(appts));
- const payments=JSON.parse(localStorage.getItem('sd_payments')||'[]');
- payments.unshift({id:'PAY-'+String(stamp).slice(-8),invoiceId,patient:data.name,description:data.service+' (appointment request)',due:amount,paid:0,method:data.paymentMethod==='GCash (Online)'?'GCash':'Pay at clinic',date:new Date().toISOString().slice(0,10),dueDate:data.date,reference:'',status:'Pending',appointmentId,transactions:[]});
- localStorage.setItem('sd_payments',JSON.stringify(payments));
- const patients=JSON.parse(localStorage.getItem('sd_patients')||'[]');
- if(!patients.some(p=>(p.email&&p.email.toLowerCase()===data.email.toLowerCase())||p.name.toLowerCase()===data.name.toLowerCase())){
-  patients.unshift({id:'PT-'+String(stamp).slice(-6),name:data.name,contact:data.phone,email:data.email,last:'Not visited yet',status:'Active'});
-  localStorage.setItem('sd_patients',JSON.stringify(patients));
- }
- const activities=JSON.parse(localStorage.getItem('sd_activities')||'[]');
- activities.unshift({time:new Date().toLocaleString('en-PH'),text:'Customer appointment request received: '+data.name+' ('+data.service+') · Payment: '+data.paymentMethod});
- localStorage.setItem('sd_activities',JSON.stringify(activities.slice(0,60)));
- $('#bookingMessage').textContent='Appointment request and sample invoice '+invoiceId+' were added to the staff dashboard on this browser. Payment is still pending; no money was transferred. This demo does not sync across different devices.';
- toast('Appointment and pending payment added to this browser demo.');
+function toDatabaseTime(value){
+ const m=String(value||'').match(/(\\d{1,2}):(\\d{2})\\s*(AM|PM)?/i);
+ if(!m)throw new Error('Please choose a valid appointment time.');
+ let h=Number(m[1]),min=Number(m[2]);
+ if(m[3]){if(m[3].toUpperCase()==='PM'&&h!==12)h+=12;if(m[3].toUpperCase()==='AM'&&h===12)h=0}
+ return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0')+':00';
 }
-$('#bookingForm').onsubmit=e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget));if(!user){pendingBooking=data;showAuth('login');$('#authMessage').textContent=hasConfig?'Log in or create an account to continue.':'Connect Supabase authentication before customer sign-up and booking can be enabled.';return}submitDemoBooking(data)};
+async function submitDemoBooking(data){
+ if(!sb||!user){showAuth('Please log in before requesting an appointment.');return}
+ const button=$('#bookingForm button[type="submit"]');if(button)button.disabled=true;
+ try{
+  const {data:result,error}=await sb.rpc('create_customer_appointment',{
+   p_customer_name:data.name,p_customer_phone:data.phone,p_service:data.service,
+   p_notes:data.notes||'',p_doctor_name:data.doctor,p_date:data.date,
+   p_time:toDatabaseTime(data.time),p_payment_method:data.paymentMethod
+  });
+  if(error)throw error;
+  const status=result?.status||'Pending';
+  const ref=result?.id?'Appointment reference: '+result.id:'';
+  $('#bookingMessage').textContent=status==='Confirmed'
+   ?'Your appointment is confirmed automatically because the selected dentist has enabled automatic confirmation. '+ref+' Please note that payment is still pending; no payment was processed.'
+   :'Your appointment request has been received and is pending clinic confirmation. '+ref+' Payment is still pending; no payment was processed.';
+  toast(status==='Confirmed'?'Appointment confirmed.':'Appointment request submitted.');
+  $('#bookingForm').reset();updatePaymentPreview();checkDentistAvailability();
+ }catch(err){
+  $('#bookingMessage').textContent=err.message||'Unable to submit your appointment. Please try again.';
+  toast(err.message||'Appointment could not be submitted.');
+ }finally{if(button)button.disabled=false}
+}
+$('#bookingForm').onsubmit=async e=>{
+ e.preventDefault();
+ const data=Object.fromEntries(new FormData(e.currentTarget));
+ if(!user){pendingBooking=data;showAuth('login');$('#authMessage').textContent=hasConfig?'Log in or create an account to continue.':'Connect Supabase authentication before customer sign-up and booking can be enabled.';return}
+ await submitDemoBooking(data);
+};
 $('#menuToggle').onclick=()=>$('#mainNav').classList.toggle('open');document.querySelectorAll('#mainNav a').forEach(a=>a.onclick=()=>$('#mainNav').classList.remove('open'));
 updatePaymentPreview();
 const answers=[
