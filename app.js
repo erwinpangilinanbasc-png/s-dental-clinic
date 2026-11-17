@@ -216,12 +216,9 @@ async function syncSharedDoctorSchedules(){
  const client=window.clinicSupabase,canManage=clinicRole==='admin'||clinicRole==='doctor';
  if(canManage){
   const localHours=Object.entries(hours||{}).filter(([name])=>clinicRole!=='doctor'||name===clinicProfile?.doctor_name);
-  const {data:existingSchedules,error:readError}=await client.from('clinic_doctor_schedules').select('doctor_name');
-  if(readError)throw readError;
-  const known=new Set((existingSchedules||[]).map(x=>x.doctor_name));
-  for(const [name,h] of localHours)if(!known.has(name)){
-   const {error}=await client.from('clinic_doctor_schedules').insert({doctor_name:name,working_days:h.days||[],start_time:h.start||'09:00',end_time:h.end||'17:00',break_start:h.breakStart||null,break_end:h.breakEnd||null,lunch_start:h.lunchStart||null,lunch_end:h.lunchEnd||null});
-   if(error&&error.code!=='23505')throw error;
+  for(const [name,h] of localHours){
+   const {error}=await client.from('clinic_doctor_schedules').upsert({doctor_name:name,working_days:h.days||[],start_time:h.start||'09:00',end_time:h.end||'17:00',break_start:h.breakStart||null,break_end:h.breakEnd||null,lunch_start:h.lunchStart||null,lunch_end:h.lunchEnd||null},{onConflict:'doctor_name'});
+   if(error)throw error;
   }
   const localBlocks=(blocks||[]).filter(b=>!b.dbId&&(clinicRole!=='doctor'||b.doctor===clinicProfile?.doctor_name));
   for(const b of localBlocks){const {error}=await client.from('clinic_doctor_blocks').upsert({doctor_name:b.doctor,blocked_date:b.date,reason:b.reason||'Unavailable'},{onConflict:'doctor_name,blocked_date',ignoreDuplicates:true});if(error)throw error}
