@@ -18,6 +18,7 @@ function showReschedulePage(){
 }
 showReschedulePage();
 
+let sb=null;
 const cfg=window.SUPABASE_CONFIG||{}, hasConfig=!!(cfg.url&&cfg.anonKey&&window.supabase);
 sb=hasConfig?window.supabase.createClient(cfg.url,cfg.anonKey):null;
 let user=null, authMode='login', pendingBooking=null;
@@ -40,7 +41,6 @@ if(gcashQr && (/^https:\/\//i.test(gcashQr)||/^\.\.\//.test(gcashQr)||/^\.\//.te
  qr.onerror=()=>{qr.hidden=true;$('#gcashQrPlaceholder').hidden=false;$('#gcashMerchantStatus').textContent='The configured QR image could not be loaded. Please pay at the clinic and contact staff.'};
 }
 
-let sb=null;
 const dateInput=$('input[name="date"]');dateInput.min=new Date().toISOString().slice(0,10);
 const doctorSelect=$('#bookingDoctor'),dateSelect=$('#bookingForm [name="date"]'),timeSelect=$('#bookingForm [name="time"]'),availabilityPanel=$('#availabilityPanel');
 const defaultHours={days:['Mon','Tue','Wed','Thu','Fri'],start:'09:00',end:'17:00',breakStart:'10:30',breakEnd:'10:45',lunchStart:'12:00',lunchEnd:'13:00'};
