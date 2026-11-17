@@ -21,6 +21,12 @@ showReschedulePage();
 const cfg=window.SUPABASE_CONFIG||{}, hasConfig=!!(cfg.url&&cfg.anonKey&&window.supabase), sb=hasConfig?window.supabase.createClient(cfg.url,cfg.anonKey):null;
 let user=null, authMode='login', pendingBooking=null;
 $('#year').textContent=new Date().getFullYear();
+const planModal=$('#planRequestModal'),planForm=$('#planRequestForm');
+function closePlanModal(){planModal.classList.remove('open');planModal.setAttribute('aria-hidden','true')}
+document.querySelectorAll('[data-plan-request]').forEach(button=>button.addEventListener('click',()=>{planForm.reset();$('#requestedPlan').value=button.dataset.planRequest;$('#planRequestMessage').textContent='Submitting a request does not activate a plan or require payment.';$('#submitPlanRequest').disabled=false;planModal.classList.add('open');planModal.setAttribute('aria-hidden','false')}));
+$('#closePlanRequest').onclick=closePlanModal;
+planModal.addEventListener('click',e=>{if(e.target===planModal)closePlanModal()});
+planForm.onsubmit=e=>{e.preventDefault();const v=Object.fromEntries(new FormData(planForm));const requests=JSON.parse(localStorage.getItem('sd_plan_requests')||'[]');const request={id:'PLN-'+String(Date.now()).slice(-8),plan:v.plan,name:v.name.trim(),email:v.email.trim(),phone:v.phone.trim(),message:v.message.trim(),createdAt:new Date().toISOString(),status:'Pending review'};requests.unshift(request);localStorage.setItem('sd_plan_requests',JSON.stringify(requests));const activities=JSON.parse(localStorage.getItem('sd_activities')||'[]');activities.unshift({time:new Date().toLocaleString('en-PH'),text:'Customer plan request received: '+request.name+' — '+request.plan});localStorage.setItem('sd_activities',JSON.stringify(activities.slice(0,60)));$('#planRequestMessage').textContent='Your request has been recorded in this browser demo. The clinic must review it before activation. This demo does not sync across different devices.';toast('Plan request submitted. Await clinic review.');$('#submitPlanRequest').disabled=true;setTimeout(()=>{closePlanModal();$('#submitPlanRequest').disabled=false},2200)};
 const gcashName=(cfg.gcashMerchantName||'').trim(),gcashQr=(cfg.gcashQrImageUrl||'').trim();
 if(gcashName)$('#gcashMerchantStatus').textContent='Merchant account: '+gcashName+'. Please verify this exact name in GCash before confirming payment.';
 if(gcashQr && (/^https:\/\//i.test(gcashQr)||/^\.\.\//.test(gcashQr)||/^\.\//.test(gcashQr)||/^assets\//.test(gcashQr))){
