@@ -104,6 +104,26 @@ function toDatabaseTime(value){
  if(m[3]){if(m[3].toUpperCase()==='PM'&&h!==12)h+=12;if(m[3].toUpperCase()==='AM'&&h===12)h=0}
  return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0')+':00';
 }
+function showBookingReceipt(data,result,status){
+ const id=result?.id||('SDC-'+Date.now()),amount=sampleAmount(data.service),amountText=amount?'₱'+amount.toLocaleString('en-PH'):'To be quoted by clinic';
+ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ let layer=document.getElementById('bookingReceiptLayer');
+ if(!layer){
+  layer=document.createElement('div');layer.id='bookingReceiptLayer';layer.className='receipt-layer';
+  layer.innerHTML='<section class="booking-receipt" role="dialog" aria-modal="true"><div class="receipt-actions"><button type="button" class="btn btn-outline" id="closeBookingReceipt">Close</button><button type="button" class="btn btn-primary" id="printBookingReceipt">Print receipt</button></div><div class="receipt-brand"><img src="../assets/clinic-logo.svg" alt=""><div><b>S Dental Clinic</b><small>APPOINTMENT CONFIRMATION</small></div></div><h2>Appointment receipt</h2><p class="receipt-subtitle">Please keep this receipt for your records.</p><div class="receipt-status" id="receiptStatus"></div><div class="receipt-number"><span>REFERENCE NUMBER</span><b id="receiptNumber"></b></div><div class="receipt-details" id="receiptDetails"></div><div class="receipt-total"><span>Estimated service amount</span><b id="receiptAmount"></b></div><p class="receipt-disclaimer">This is an appointment request/confirmation receipt, not an official payment receipt. No payment was processed. Payment status: PENDING. The final treatment fee will be confirmed by the clinic.</p><p class="receipt-thanks">Thank you for choosing S Dental Clinic.</p></section>';
+  document.body.appendChild(layer);
+  const style=document.createElement('style');style.textContent='.receipt-layer{position:fixed;inset:0;z-index:100;background:#10213c99;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto}.booking-receipt{background:#fff;color:#1b2b43;width:min(620px,100%);max-height:94vh;overflow:auto;border-radius:16px;padding:30px;box-shadow:0 20px 70px #10213c44}.receipt-actions{display:flex;justify-content:flex-end;gap:10px;margin-bottom:22px}.receipt-brand{display:flex;align-items:center;gap:12px;border-bottom:1px solid #e1e9f2;padding-bottom:18px}.receipt-brand img{width:48px;height:48px;object-fit:contain}.receipt-brand b,.receipt-brand small{display:block}.receipt-brand b{font:800 17px Manrope}.receipt-brand small,.receipt-number span{font-size:9px;letter-spacing:1.5px;color:#6c7d94}.booking-receipt h2{font:800 27px Manrope;margin:24px 0 4px}.receipt-subtitle{color:#6c7d94;font-size:12px}.receipt-status{display:inline-block;margin:12px 0;padding:8px 12px;border-radius:20px;background:#e5f7ed;color:#16835f;font-size:11px;font-weight:700}.receipt-status.pending{background:#fff4df;color:#94600a}.receipt-number{display:flex;justify-content:space-between;gap:10px;background:#f5f8fc;padding:14px;border-radius:9px;margin:10px 0 18px}.receipt-number b{font-size:12px;overflow-wrap:anywhere}.receipt-details{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:6px 0 18px}.receipt-details span,.receipt-details b{display:block}.receipt-details span{font-size:10px;color:#6c7d94;margin-bottom:5px}.receipt-details b{font-size:12px;overflow-wrap:anywhere}.receipt-total{border-top:1px solid #e1e9f2;border-bottom:1px solid #e1e9f2;padding:17px 0;display:flex;justify-content:space-between;gap:12px;font-size:12px}.receipt-total b{font-size:17px;color:#172e57}.receipt-disclaimer{background:#fff8e8;color:#84621c;padding:13px;border-radius:8px;font-size:10px;line-height:1.6;margin-top:18px}.receipt-thanks{text-align:center;font-size:11px;color:#6c7d94;margin:20px 0 0}@media(max-width:520px){.booking-receipt{padding:20px}.receipt-details{grid-template-columns:1fr 1fr}.receipt-number{flex-direction:column}}@media print{body>*:not(#bookingReceiptLayer){display:none!important}#bookingReceiptLayer{position:static!important;display:block!important;background:#fff!important;padding:0!important;overflow:visible!important}.booking-receipt{width:100%!important;max-height:none!important;overflow:visible!important;box-shadow:none!important;border-radius:0!important;padding:12px!important}.receipt-actions{display:none!important}}';document.head.appendChild(style);
+  layer.querySelector('#closeBookingReceipt').onclick=()=>layer.remove();
+  layer.querySelector('#printBookingReceipt').onclick=()=>window.print();
+ }
+ layer.querySelector('#receiptStatus').textContent=status==='Confirmed'?'APPOINTMENT CONFIRMED':'PENDING CLINIC CONFIRMATION';
+ layer.querySelector('#receiptStatus').classList.toggle('pending',status!=='Confirmed');
+ layer.querySelector('#receiptNumber').textContent=id;
+ const rows=[['Customer name',data.name],['Email address',data.email],['Contact number',data.phone],['Service',data.service],['Preferred date',data.date],['Preferred time',data.time],['Dentist',data.doctor],['Payment method',data.paymentMethod],['Payment status','Pending']];
+ layer.querySelector('#receiptDetails').innerHTML=rows.map(([k,v])=>'<div><span>'+esc(k)+'</span><b>'+esc(v||'—')+'</b></div>').join('');
+ layer.querySelector('#receiptAmount').textContent=amountText+' (estimate)';
+ layer.hidden=false;
+}
 async function submitDemoBooking(data){
  if(!sb||!user){showAuth('Please log in before requesting an appointment.');return}
  const button=$('#bookingForm button[type="submit"]');if(button)button.disabled=true;
@@ -114,12 +134,12 @@ async function submitDemoBooking(data){
    p_time:toDatabaseTime(data.time),p_payment_method:data.paymentMethod
   });
   if(error)throw error;
-  const status=result?.status||'Pending';
-  const ref=result?.id?'Appointment reference: '+result.id:'';
+  const status=result?.status||'Pending',ref=result?.id?'Appointment reference: '+result.id:'';
   $('#bookingMessage').textContent=status==='Confirmed'
-   ?'Your appointment is confirmed automatically because the selected dentist has enabled automatic confirmation. '+ref+' Please note that payment is still pending; no payment was processed.'
+   ?'Your appointment is confirmed automatically because the selected dentist has enabled that setting. '+ref+' Payment is still pending; no payment was processed.'
    :'Your appointment request has been received and is pending clinic confirmation. '+ref+' Payment is still pending; no payment was processed.';
   toast(status==='Confirmed'?'Appointment confirmed.':'Appointment request submitted.');
+  showBookingReceipt(data,result,status);
   $('#bookingForm').reset();updatePaymentPreview();checkDentistAvailability();
  }catch(err){
   $('#bookingMessage').textContent=err.message||'Unable to submit your appointment. Please try again.';
