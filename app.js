@@ -158,6 +158,10 @@ render=function(){
    return;
  }
  originalRender();
+ if((clinicRole==='staff'||clinicRole==='doctor')&&page==='patients'){
+   const addPatientButton=document.querySelector('[data-act="addPatient"]');
+   if(addPatientButton){addPatientButton.hidden=false;addPatientButton.style.display='';addPatientButton.onclick=()=>patientModal();}
+ }
  if(clinicRole==='staff'){
    document.querySelectorAll('[data-edit],[data-unblock],[data-doctor-schedule],[data-act="addAppt"],[data-act="addDoctor"]').forEach(b=>b.remove());
    if(page==='patients')document.querySelectorAll('[data-pedit]').forEach(b=>{b.textContent='View';b.onclick=()=>patientViewModal(patients[+b.dataset.pedit])});
