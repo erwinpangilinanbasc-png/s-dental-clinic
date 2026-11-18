@@ -111,7 +111,7 @@ function bindPaymentActions(){
  document.querySelectorAll('[data-payment-receipt]').forEach(b=>b.onclick=()=>{const p=payments.find(x=>x.id===b.dataset.paymentReceipt);if(p)printPaymentReceipt(p)});
 }
 
-function render(){let views={planRequests:planRequestsPage,payments:paymentsPage,dashboard:dash,patients:patientsPage,activities:activitiesPage,reports:reportsPage,schedule:schedulePage,doctors:doctorsPage,doctorSchedule:doctorSchedulePage,checklist:checklistPage,reportPreview:reportPreview};$('#pageContent').innerHTML=(views[page]||dash)();bind();bindPayments()}
+function render(){const portalLink=$('#customerPortalLink');if(portalLink){const showPortal=page==='dashboard';portalLink.hidden=!showPortal;portalLink.style.setProperty('display',showPortal?'inline-flex':'none','important');}let views={planRequests:planRequestsPage,payments:paymentsPage,dashboard:dash,patients:patientsPage,activities:activitiesPage,reports:reportsPage,schedule:schedulePage,doctors:doctorsPage,doctorSchedule:doctorSchedulePage,checklist:checklistPage,reportPreview:reportPreview};$('#pageContent').innerHTML=(views[page]||dash)();bind();bindPayments()}
 function bind(){
  if($('#autoConfirmToggle'))$('#autoConfirmToggle').onchange=async e=>{
  const toggle=e.target;toggle.disabled=true;
@@ -152,6 +152,7 @@ go=function(nextPage){
 };
 const originalRender=render;
 render=function(){
+ const portalLink=$('#customerPortalLink');if(portalLink){const showPortal=page==='dashboard';portalLink.hidden=!showPortal;portalLink.style.setProperty('display',showPortal?'inline-flex':'none','important');}
  if(page==='planRequests'){
    $('#pageTitle').textContent='Plan Requests';
    $('#crumbPage').textContent='Plan Requests';
