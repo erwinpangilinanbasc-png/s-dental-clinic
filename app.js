@@ -140,6 +140,10 @@ go=function(nextPage){
 };
 const originalRender=render;
 render=function(){
+ if(page==='planRequests'){
+   $('#pageTitle').textContent='Plan Requests';
+   $('#crumbPage').textContent='Plan Requests';
+ }
  if(!clinicRole)return;
  document.querySelectorAll('#mainNav [data-page]').forEach(b=>{b.hidden=!roleCan(b.dataset.page)});
  $('#quickAdd').hidden=clinicRole!=='admin';
