@@ -104,17 +104,59 @@ function toDatabaseTime(value){
  if(m[3]){if(m[3].toUpperCase()==='PM'&&h!==12)h+=12;if(m[3].toUpperCase()==='AM'&&h===12)h=0}
  return String(h).padStart(2,'0')+':'+String(min).padStart(2,'0')+':00';
 }
+async function downloadBookingReceiptPdf(data,id,status,amountText){
+ try{
+  if(!window.jspdf?.jsPDF){
+   await new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    script.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+    script.onload=resolve;script.onerror=()=>reject(new Error('PDF service could not be loaded. Please check your internet connection and try again.'));
+    document.head.appendChild(script);
+   });
+  }
+  const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'});
+  const navy=[23,46,87],muted=[108,125,148];
+  doc.setFillColor(...navy);doc.rect(0,0,210,34,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(19);doc.text('S DENTAL CLINIC',18,16);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text('APPOINTMENT CONFIRMATION',18,23);
+  doc.setTextColor(27,43,67);doc.setFont('helvetica','bold');doc.setFontSize(20);doc.text('Appointment Receipt',18,49);
+  doc.setFont('helvetica','bold');doc.setFontSize(10);
+  doc.setTextColor(...(status==='Confirmed'?[22,131,95]:[148,96,10]));
+  doc.text(status==='Confirmed'?'APPOINTMENT CONFIRMED':'PENDING CLINIC CONFIRMATION',18,59);
+  doc.setFillColor(245,248,252);doc.roundedRect(18,66,174,15,2,2,'F');
+  doc.setTextColor(...muted);doc.setFontSize(8);doc.text('REFERENCE NUMBER',23,72);
+  doc.setTextColor(27,43,67);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text(String(id),23,77);
+  const rows=[['Customer name',data.name],['Email address',data.email],['Contact number',data.phone],['Service',data.service],['Preferred date',data.date],['Preferred time',data.time],['Dentist',data.doctor],['Payment method',data.paymentMethod],['Payment status','Pending']];
+  let y=96;
+  rows.forEach(([label,value],index)=>{
+   const x=index%2===0?18:108;
+   if(index%2===0&&index>0)y+=20;
+   doc.setTextColor(...muted);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(label,x,y);
+   doc.setTextColor(27,43,67);doc.setFont('helvetica','bold');doc.setFontSize(10);
+   const wrapped=doc.splitTextToSize(String(value||'—'),78);doc.text(wrapped,x,y+6);
+  });
+  y+=32;doc.setDrawColor(225,233,242);doc.line(18,y,192,y);
+  doc.setTextColor(27,43,67);doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text('Estimated service amount',18,y+12);
+  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(String(amountText).replace('₱','PHP ' )+' (estimate)',192,y+12,{align:'right'});
+  y+=26;doc.setFillColor(255,248,232);doc.roundedRect(18,y,174,29,2,2,'F');
+  doc.setTextColor(132,98,28);doc.setFont('helvetica','normal');doc.setFontSize(8);
+  doc.text(doc.splitTextToSize('This is an appointment request/confirmation receipt, not an official payment receipt. No payment was processed. Payment status is PENDING. The final treatment fee will be confirmed by the clinic.',164),23,y+8);
+  doc.setTextColor(...muted);doc.setFontSize(9);doc.text('Thank you for choosing S Dental Clinic.',105,270,{align:'center'});
+  const filename='S-Dental-Clinic-Receipt-'+String(id).replace(/[^a-z0-9_-]/gi,'-')+'.pdf';
+  doc.save(filename);
+ }catch(err){toast(err.message||'Unable to download receipt. Please try again.')}
+}
 function showBookingReceipt(data,result,status){
  const id=result?.id||('SDC-'+Date.now()),amount=sampleAmount(data.service),amountText=amount?'₱'+amount.toLocaleString('en-PH'):'To be quoted by clinic';
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  let layer=document.getElementById('bookingReceiptLayer');
  if(!layer){
   layer=document.createElement('div');layer.id='bookingReceiptLayer';layer.className='receipt-layer';
-  layer.innerHTML='<section class="booking-receipt" role="dialog" aria-modal="true"><div class="receipt-actions"><button type="button" class="btn btn-outline" id="closeBookingReceipt">Close</button><button type="button" class="btn btn-primary" id="printBookingReceipt">Print receipt</button></div><div class="receipt-brand"><img src="../assets/clinic-logo.svg" alt=""><div><b>S Dental Clinic</b><small>APPOINTMENT CONFIRMATION</small></div></div><h2>Appointment receipt</h2><p class="receipt-subtitle">Please keep this receipt for your records.</p><div class="receipt-status" id="receiptStatus"></div><div class="receipt-number"><span>REFERENCE NUMBER</span><b id="receiptNumber"></b></div><div class="receipt-details" id="receiptDetails"></div><div class="receipt-total"><span>Estimated service amount</span><b id="receiptAmount"></b></div><p class="receipt-disclaimer">This is an appointment request/confirmation receipt, not an official payment receipt. No payment was processed. Payment status: PENDING. The final treatment fee will be confirmed by the clinic.</p><p class="receipt-thanks">Thank you for choosing S Dental Clinic.</p></section>';
+  layer.innerHTML='<section class="booking-receipt" role="dialog" aria-modal="true"><div class="receipt-actions"><button type="button" class="btn btn-outline" id="closeBookingReceipt">Close</button><button type="button" class="btn btn-primary" id="downloadBookingReceipt">Download receipt</button></div><div class="receipt-brand"><img src="../assets/clinic-logo.svg" alt=""><div><b>S Dental Clinic</b><small>APPOINTMENT CONFIRMATION</small></div></div><h2>Appointment receipt</h2><p class="receipt-subtitle">Please keep this receipt for your records.</p><div class="receipt-status" id="receiptStatus"></div><div class="receipt-number"><span>REFERENCE NUMBER</span><b id="receiptNumber"></b></div><div class="receipt-details" id="receiptDetails"></div><div class="receipt-total"><span>Estimated service amount</span><b id="receiptAmount"></b></div><p class="receipt-disclaimer">This is an appointment request/confirmation receipt, not an official payment receipt. No payment was processed. Payment status: PENDING. The final treatment fee will be confirmed by the clinic.</p><p class="receipt-thanks">Thank you for choosing S Dental Clinic.</p></section>';
   document.body.appendChild(layer);
   const style=document.createElement('style');style.textContent='.receipt-layer{position:fixed;inset:0;z-index:100;background:#10213c99;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto}.booking-receipt{background:#fff;color:#1b2b43;width:min(620px,100%);max-height:94vh;overflow:auto;border-radius:16px;padding:30px;box-shadow:0 20px 70px #10213c44}.receipt-actions{display:flex;justify-content:flex-end;gap:10px;margin-bottom:22px}.receipt-brand{display:flex;align-items:center;gap:12px;border-bottom:1px solid #e1e9f2;padding-bottom:18px}.receipt-brand img{width:48px;height:48px;object-fit:contain}.receipt-brand b,.receipt-brand small{display:block}.receipt-brand b{font:800 17px Manrope}.receipt-brand small,.receipt-number span{font-size:9px;letter-spacing:1.5px;color:#6c7d94}.booking-receipt h2{font:800 27px Manrope;margin:24px 0 4px}.receipt-subtitle{color:#6c7d94;font-size:12px}.receipt-status{display:inline-block;margin:12px 0;padding:8px 12px;border-radius:20px;background:#e5f7ed;color:#16835f;font-size:11px;font-weight:700}.receipt-status.pending{background:#fff4df;color:#94600a}.receipt-number{display:flex;justify-content:space-between;gap:10px;background:#f5f8fc;padding:14px;border-radius:9px;margin:10px 0 18px}.receipt-number b{font-size:12px;overflow-wrap:anywhere}.receipt-details{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:6px 0 18px}.receipt-details span,.receipt-details b{display:block}.receipt-details span{font-size:10px;color:#6c7d94;margin-bottom:5px}.receipt-details b{font-size:12px;overflow-wrap:anywhere}.receipt-total{border-top:1px solid #e1e9f2;border-bottom:1px solid #e1e9f2;padding:17px 0;display:flex;justify-content:space-between;gap:12px;font-size:12px}.receipt-total b{font-size:17px;color:#172e57}.receipt-disclaimer{background:#fff8e8;color:#84621c;padding:13px;border-radius:8px;font-size:10px;line-height:1.6;margin-top:18px}.receipt-thanks{text-align:center;font-size:11px;color:#6c7d94;margin:20px 0 0}@media(max-width:520px){.booking-receipt{padding:20px}.receipt-details{grid-template-columns:1fr 1fr}.receipt-number{flex-direction:column}}@media print{body>*:not(#bookingReceiptLayer){display:none!important}#bookingReceiptLayer{position:static!important;display:block!important;background:#fff!important;padding:0!important;overflow:visible!important}.booking-receipt{width:100%!important;max-height:none!important;overflow:visible!important;box-shadow:none!important;border-radius:0!important;padding:12px!important}.receipt-actions{display:none!important}}';document.head.appendChild(style);
   layer.querySelector('#closeBookingReceipt').onclick=()=>layer.remove();
-  layer.querySelector('#printBookingReceipt').onclick=()=>window.print();
+  layer.querySelector('#downloadBookingReceipt').onclick=()=>downloadBookingReceiptPdf(data,id,status,amountText);
  }
  layer.querySelector('#receiptStatus').textContent=status==='Confirmed'?'APPOINTMENT CONFIRMED':'PENDING CLINIC CONFIRMATION';
  layer.querySelector('#receiptStatus').classList.toggle('pending',status!=='Confirmed');
